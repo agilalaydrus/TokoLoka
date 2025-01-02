@@ -1,0 +1,15 @@
+# Sistem
+.DS_Store
+.env
+
+# Log
+*.log
+
+# Direktori build
+/bin/
+/obj/
+/vendor/
+
+# File editor
+.idea/
+.vscode/
