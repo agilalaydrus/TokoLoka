@@ -1,14 +1,16 @@
 package service
 
 import (
-	"errors"
-	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 	"main.go/entity"
+	"main.go/middleware"
 	"main.go/repository"
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"go.uber.org/zap"
 )
 
 type UserService struct {
@@ -19,57 +21,57 @@ func NewUserService(userRepo repository.UserRepository) *UserService {
 	return &UserService{userRepo: userRepo}
 }
 
-// Struktur request untuk registrasi pengguna
 type UserRegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Role     string `json:"role"` // Role akan diberikan default jika kosong
+	Role     string `json:"role"`
 }
 
-// Struktur request untuk login pengguna
 type UserLoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// Struktur untuk memperbarui data pengguna
 type UserUpdateRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
-	Role     string `json:"role"` // Optional jika pengguna dapat mengubah role
+	Role     string `json:"role"`
 }
 
-// Fungsi untuk registrasi pengguna
 func (s *UserService) RegisterUser(user UserRegisterRequest) error {
-	// Cek apakah email sudah digunakan
-	existingUser, _ := s.userRepo.FindByEmail(user.Email)
-	if existingUser != nil {
-		return errors.New("email already in use")
-	}
+	middleware.Logger.Info("Service: Registering user", zap.String("email", user.Email))
 
 	// Validasi input
 	if user.Username == "" || user.Email == "" || user.Password == "" {
-		return errors.New("username, email, and password are required")
+		middleware.Logger.Warn("Service: Missing required fields", zap.Any("user", user))
+		return middleware.NewAppError(400, "Username, email, and password are required", nil)
 	}
 
-	// Validasi format email
 	if !isValidEmail(user.Email) {
-		return errors.New("invalid email format")
+		middleware.Logger.Warn("Service: Invalid email format", zap.String("email", user.Email))
+		return middleware.NewAppError(400, "Invalid email format", nil)
 	}
 
-	// Defaultkan role jika tidak diisi
+	// Default role jika kosong
 	if user.Role == "" {
-		user.Role = "user" // Role default
+		user.Role = "user"
+	}
+
+	// Cek email sudah digunakan
+	existingUser, _ := s.userRepo.FindByEmail(user.Email)
+	if existingUser != nil {
+		middleware.Logger.Warn("Service: Email already in use", zap.String("email", user.Email))
+		return middleware.NewAppError(409, "Email already in use", nil)
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		middleware.Logger.Error("Service: Failed to hash password", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to hash password", err)
 	}
 
-	// Simpan pengguna baru
 	newUser := entity.User{
 		Username: user.Username,
 		Email:    user.Email,
@@ -78,63 +80,63 @@ func (s *UserService) RegisterUser(user UserRegisterRequest) error {
 	}
 
 	if err := s.userRepo.Create(&newUser); err != nil {
-		return err
+		middleware.Logger.Error("Service: Failed to create user", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to create user", err)
 	}
 
+	middleware.Logger.Info("Service: User registered successfully", zap.Uint("user_id", newUser.ID))
 	return nil
 }
 
-// Fungsi untuk login pengguna
 func (s *UserService) LoginUser(user UserLoginRequest) (string, error) {
-	// Cari pengguna berdasarkan email
+	middleware.Logger.Info("Service: Logging in user", zap.String("email", user.Email))
+
 	existingUser, err := s.userRepo.FindByEmail(user.Email)
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		middleware.Logger.Warn("Service: Invalid credentials", zap.String("email", user.Email))
+		return "", middleware.NewAppError(401, "Invalid credentials", nil)
 	}
 
-	// Verifikasi password
 	err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(user.Password))
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		middleware.Logger.Warn("Service: Invalid password", zap.String("email", user.Email))
+		return "", middleware.NewAppError(401, "Invalid credentials", nil)
 	}
 
-	// Generate JWT token
 	token, err := generateJWT(existingUser)
 	if err != nil {
-		return "", err
+		middleware.Logger.Error("Service: Failed to generate JWT", zap.Error(err))
+		return "", middleware.NewAppError(500, "Failed to generate token", err)
 	}
 
+	middleware.Logger.Info("Service: User logged in successfully", zap.Uint("user_id", existingUser.ID))
 	return token, nil
 }
 
-// Fungsi untuk menghasilkan token JWT
 func generateJWT(user *entity.User) (string, error) {
-	// Set JWT claims
 	claims := jwt.MapClaims{
 		"sub":  user.ID,
 		"role": user.Role,
-		"exp":  time.Now().Add(time.Hour * 24).Unix(),
+		"exp":  time.Now().Add(24 * time.Hour).Unix(),
 	}
 
-	// Generate token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Pastikan JWT_SECRET ada di environment variable
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		return "", errors.New("JWT_SECRET is not set")
+		middleware.Logger.Fatal("Service: JWT_SECRET is not set")
+		return "", middleware.NewAppError(500, "JWT_SECRET is not set", nil)
 	}
 
-	// Sign token
 	signedToken, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
-		return "", err
+		middleware.Logger.Error("Service: Failed to sign JWT", zap.Error(err))
+		return "", middleware.NewAppError(500, "Failed to sign JWT", err)
 	}
 
 	return signedToken, nil
 }
 
-// Fungsi untuk validasi format email
 func isValidEmail(email string) bool {
 	const emailRegex = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	re := regexp.MustCompile(emailRegex)
@@ -142,21 +144,22 @@ func isValidEmail(email string) bool {
 }
 
 func (s *UserService) UpdateUser(userID uint, updatedData UserUpdateRequest) error {
-	// Cari pengguna berdasarkan ID
+	middleware.Logger.Info("Service: Updating user", zap.Uint("user_id", userID))
+
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
-		return errors.New("user not found")
+		middleware.Logger.Warn("Service: User not found", zap.Uint("user_id", userID))
+		return middleware.NewAppError(404, "User not found", err)
 	}
 
-	// Update hanya kolom yang diisi
 	if updatedData.Username != "" {
 		user.Username = updatedData.Username
 	}
 	if updatedData.Email != "" {
-		// Cek apakah email sudah digunakan oleh pengguna lain
 		existingUser, _ := s.userRepo.FindByEmail(updatedData.Email)
 		if existingUser != nil && existingUser.ID != userID {
-			return errors.New("email already in use")
+			middleware.Logger.Warn("Service: Email already in use", zap.String("email", updatedData.Email))
+			return middleware.NewAppError(409, "Email already in use", nil)
 		}
 		user.Email = updatedData.Email
 	}
@@ -164,19 +167,24 @@ func (s *UserService) UpdateUser(userID uint, updatedData UserUpdateRequest) err
 		user.Role = updatedData.Role
 	}
 
-	// Simpan perubahan
 	if err := s.userRepo.Update(user); err != nil {
-		return errors.New("failed to update user")
+		middleware.Logger.Error("Service: Failed to update user", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to update user", err)
 	}
 
+	middleware.Logger.Info("Service: User updated successfully", zap.Uint("user_id", userID))
 	return nil
 }
 
 func (s *UserService) GetUserByID(userID uint) (*entity.User, error) {
-	// Cari pengguna berdasarkan ID melalui repository
+	middleware.Logger.Info("Service: Fetching user by ID", zap.Uint("user_id", userID))
+
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
-		return nil, errors.New("user not found")
+		middleware.Logger.Warn("Service: User not found", zap.Uint("user_id", userID))
+		return nil, middleware.NewAppError(404, "User not found", err)
 	}
+
+	middleware.Logger.Info("Service: User fetched successfully", zap.Any("user", user))
 	return user, nil
 }

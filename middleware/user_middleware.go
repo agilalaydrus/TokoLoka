@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -88,15 +89,10 @@ func AuthorizeJWT(c *gin.Context) {
 	}
 
 	// Ambil user_id dari klaim (menggunakan sub)
-	var userID string
-	switch sub := claims["sub"].(type) {
-	case float64:
-		userID = fmt.Sprintf("%.0f", sub) // Jika sub adalah float64
-	case string:
-		userID = sub // Jika sub adalah string
-	default:
-		log.Println("Middleware: sub (user_id) tidak ditemukan atau tipe data tidak valid")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id tidak ditemukan dalam token"})
+	userID, err := extractUserID(claims["sub"])
+	if err != nil {
+		log.Println("Middleware: Error extracting user_id from token", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id tidak valid dalam token"})
 		c.Abort()
 		return
 	}
@@ -114,13 +110,28 @@ func AuthorizeJWT(c *gin.Context) {
 	c.Set("user_id", userID)
 	c.Set("role", role)
 
-	log.Printf("Middleware: Token berhasil diverifikasi (user_id=%s, role=%s)", userID, role)
+	log.Printf("Middleware: Token berhasil diverifikasi (user_id=%v, role=%s)", userID, role)
 
 	// Lanjutkan ke request berikutnya
 	c.Next()
 }
 
-// RoleBasedAccessControl middleware untuk membatasi akses berdasarkan role
+// Fungsi untuk mengekstrak user_id dari klaim
+func extractUserID(sub interface{}) (uint, error) {
+	switch v := sub.(type) {
+	case float64:
+		return uint(v), nil
+	case string:
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("error converting string to uint")
+		}
+		return uint(id), nil
+	default:
+		return 0, fmt.Errorf("invalid type for user_id")
+	}
+}
+
 func RoleBasedAccessControl(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Ambil role dari context
