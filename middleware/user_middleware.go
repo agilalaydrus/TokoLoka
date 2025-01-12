@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -88,10 +89,10 @@ func AuthorizeJWT(c *gin.Context) {
 	}
 
 	// Ambil user_id dari klaim (menggunakan sub)
-	userID, userIDOk := claims["sub"].(float64) // Ubah ke "sub"
-	if !userIDOk {
-		log.Println("Middleware: sub (user_id) tidak ditemukan dalam token")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id tidak ditemukan dalam token"})
+	userID, err := extractUserID(claims["sub"])
+	if err != nil {
+		log.Println("Middleware: Error extracting user_id from token", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id tidak valid dalam token"})
 		c.Abort()
 		return
 	}
@@ -106,16 +107,31 @@ func AuthorizeJWT(c *gin.Context) {
 	}
 
 	// Simpan user_id dan role ke context untuk digunakan di handler berikutnya
-	c.Set("user_id", uint(userID)) // Konversi float64 ke uint
+	c.Set("user_id", userID)
 	c.Set("role", role)
 
-	log.Printf("Middleware: Token berhasil diverifikasi (user_id=%d, role=%s)", uint(userID), role)
+	log.Printf("Middleware: Token berhasil diverifikasi (user_id=%v, role=%s)", userID, role)
 
 	// Lanjutkan ke request berikutnya
 	c.Next()
 }
 
-// RoleBasedAccessControl middleware untuk membatasi akses berdasarkan role
+// Fungsi untuk mengekstrak user_id dari klaim
+func extractUserID(sub interface{}) (uint, error) {
+	switch v := sub.(type) {
+	case float64:
+		return uint(v), nil
+	case string:
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("error converting string to uint")
+		}
+		return uint(id), nil
+	default:
+		return 0, fmt.Errorf("invalid type for user_id")
+	}
+}
+
 func RoleBasedAccessControl(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Ambil role dari context

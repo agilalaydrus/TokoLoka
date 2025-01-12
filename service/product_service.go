@@ -1,9 +1,9 @@
 package service
 
 import (
-	"errors"
-	"log"
+	"go.uber.org/zap"
 	"main.go/entity"
+	"main.go/middleware"
 	"main.go/repository"
 )
 
@@ -17,145 +17,145 @@ func NewProductService(repo repository.ProductRepository) *ProductService {
 
 // Category methods
 func (s *ProductService) CreateCategory(category *entity.Category) error {
-	log.Printf("Service: Creating category with data: %+v", category)
+	middleware.Logger.Info("Service: Creating category", zap.Any("category", category))
 
 	if category.Name == "" {
-		log.Println("Service: Category name cannot be empty")
-		return errors.New("category name cannot be empty")
+		middleware.Logger.Warn("Service: Category name cannot be empty")
+		return middleware.NewAppError(400, "Category name cannot be empty", nil)
 	}
 
 	if err := s.repo.CreateCategory(category); err != nil {
-		log.Printf("Service: Failed to create category: %v", err)
-		return err
+		middleware.Logger.Error("Service: Failed to create category", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to create category", err)
 	}
 
-	log.Println("Service: Category created successfully")
+	middleware.Logger.Info("Service: Category created successfully", zap.Uint("category_id", category.ID))
 	return nil
 }
 
 func (s *ProductService) GetAllCategories() ([]entity.Category, error) {
-	log.Println("Service: Fetching all categories")
+	middleware.Logger.Info("Service: Fetching all categories")
 
 	categories, err := s.repo.GetAllCategories()
 	if err != nil {
-		log.Printf("Service: Error fetching categories: %v", err)
-		return nil, err
+		middleware.Logger.Error("Service: Error fetching categories", zap.Error(err))
+		return nil, middleware.NewAppError(500, "Error fetching categories", err)
 	}
 
-	log.Printf("Service: Fetched categories: %+v", categories)
+	middleware.Logger.Info("Service: Fetched categories", zap.Any("categories", categories))
 	return categories, nil
 }
 
 func (s *ProductService) GetCategoryByID(id uint) (*entity.Category, error) {
-	log.Printf("Service: Fetching category with ID: %d", id)
+	middleware.Logger.Info("Service: Fetching category", zap.Uint("category_id", id))
 
 	category, err := s.repo.GetCategoryByID(id)
 	if err != nil {
-		log.Printf("Service: Category not found: %v", err)
-		return nil, errors.New("category not found")
+		middleware.Logger.Warn("Service: Category not found", zap.Uint("category_id", id))
+		return nil, middleware.NewAppError(404, "Category not found", err)
 	}
 
-	log.Printf("Service: Fetched category: %+v", category)
+	middleware.Logger.Info("Service: Fetched category", zap.Any("category", category))
 	return category, nil
 }
 
 func (s *ProductService) UpdateCategory(category *entity.Category) error {
-	log.Printf("Service: Updating category with ID: %d", category.ID)
+	middleware.Logger.Info("Service: Updating category", zap.Uint("category_id", category.ID))
 
 	existingCategory, err := s.repo.GetCategoryByID(category.ID)
 	if err != nil {
-		log.Printf("Service: Category not found for update: %v", err)
-		return errors.New("category not found")
+		middleware.Logger.Warn("Service: Category not found for update", zap.Uint("category_id", category.ID))
+		return middleware.NewAppError(404, "Category not found", err)
 	}
 
 	existingCategory.Name = category.Name
 	existingCategory.Description = category.Description
 
 	if err := s.repo.UpdateCategory(existingCategory); err != nil {
-		log.Printf("Service: Failed to update category: %v", err)
-		return errors.New("failed to update category")
+		middleware.Logger.Error("Service: Failed to update category", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to update category", err)
 	}
 
-	log.Println("Service: Category updated successfully")
+	middleware.Logger.Info("Service: Category updated successfully", zap.Uint("category_id", category.ID))
 	return nil
 }
 
 func (s *ProductService) DeleteCategory(id uint) error {
-	log.Printf("Service: Deleting category with ID: %d", id)
+	middleware.Logger.Info("Service: Deleting category", zap.Uint("category_id", id))
 
 	_, err := s.repo.GetCategoryByID(id)
 	if err != nil {
-		log.Printf("Service: Category not found for deletion: %v", err)
-		return errors.New("category not found")
+		middleware.Logger.Warn("Service: Category not found for deletion", zap.Uint("category_id", id))
+		return middleware.NewAppError(404, "Category not found", err)
 	}
 
 	if err := s.repo.DeleteCategory(id); err != nil {
-		log.Printf("Service: Failed to delete category: %v", err)
-		return errors.New("failed to delete category")
+		middleware.Logger.Error("Service: Failed to delete category", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to delete category", err)
 	}
 
-	log.Println("Service: Category deleted successfully")
+	middleware.Logger.Info("Service: Category deleted successfully", zap.Uint("category_id", id))
 	return nil
 }
 
 // Product methods
 func (s *ProductService) CreateProduct(product *entity.Product) error {
-	log.Printf("Service: Creating product with data: %+v", product)
+	middleware.Logger.Info("Service: Creating product", zap.Any("product", product))
 
 	if product.Name == "" || product.Price <= 0 || product.Stock < 0 {
-		log.Println("Service: Invalid product data")
-		return errors.New("invalid product data")
+		middleware.Logger.Warn("Service: Invalid product data", zap.Any("product", product))
+		return middleware.NewAppError(400, "Invalid product data", nil)
 	}
 
 	// Validasi kategori
 	_, err := s.repo.GetCategoryByID(product.CategoryID)
 	if err != nil {
-		log.Printf("Service: Category not found for product: %v", err)
-		return errors.New("category not found")
+		middleware.Logger.Warn("Service: Category not found for product", zap.Uint("category_id", product.CategoryID))
+		return middleware.NewAppError(404, "Category not found", err)
 	}
 
 	if err := s.repo.CreateProduct(product); err != nil {
-		log.Printf("Service: Failed to create product: %v", err)
-		return err
+		middleware.Logger.Error("Service: Failed to create product", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to create product", err)
 	}
 
-	log.Println("Service: Product created successfully")
+	middleware.Logger.Info("Service: Product created successfully", zap.Uint("product_id", product.ID))
 	return nil
 }
 
 func (s *ProductService) GetAllProducts() ([]entity.Product, error) {
-	log.Println("Service: Fetching all products")
+	middleware.Logger.Info("Service: Fetching all products")
 
 	products, err := s.repo.GetAllProducts()
 	if err != nil {
-		log.Printf("Service: Error fetching products: %v", err)
-		return nil, err
+		middleware.Logger.Error("Service: Error fetching products", zap.Error(err))
+		return nil, middleware.NewAppError(500, "Error fetching products", err)
 	}
 
-	log.Printf("Service: Fetched products: %+v", products)
+	middleware.Logger.Info("Service: Fetched products", zap.Any("products", products))
 	return products, nil
 }
 
 func (s *ProductService) GetProductByID(id uint) (*entity.Product, error) {
-	log.Printf("Service: Fetching product with ID: %d", id)
+	middleware.Logger.Info("Service: Fetching product", zap.Uint("product_id", id))
 
 	product, err := s.repo.GetProductByID(id)
 	if err != nil {
-		log.Printf("Service: Product not found: %v", err)
-		return nil, errors.New("product not found")
+		middleware.Logger.Warn("Service: Product not found", zap.Uint("product_id", id))
+		return nil, middleware.NewAppError(404, "Product not found", err)
 	}
 
-	log.Printf("Service: Fetched product: %+v", product)
+	middleware.Logger.Info("Service: Fetched product", zap.Any("product", product))
 	return product, nil
 }
 
 func (s *ProductService) UpdateProduct(product *entity.Product) error {
-	log.Printf("Service: Updating product with ID: %d", product.ID)
+	middleware.Logger.Info("Service: Updating product", zap.Uint("product_id", product.ID))
 
 	existingProduct, err := s.repo.GetProductByID(product.ID)
 	if err != nil {
-		log.Printf("Service: Product not found for update: %v", err)
-		return errors.New("product not found")
+		middleware.Logger.Warn("Service: Product not found for update", zap.Uint("product_id", product.ID))
+		return middleware.NewAppError(404, "Product not found", err)
 	}
 
 	existingProduct.Name = product.Name
@@ -165,28 +165,28 @@ func (s *ProductService) UpdateProduct(product *entity.Product) error {
 	existingProduct.CategoryID = product.CategoryID
 
 	if err := s.repo.UpdateProduct(existingProduct); err != nil {
-		log.Printf("Service: Failed to update product: %v", err)
-		return errors.New("failed to update product")
+		middleware.Logger.Error("Service: Failed to update product", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to update product", err)
 	}
 
-	log.Println("Service: Product updated successfully")
+	middleware.Logger.Info("Service: Product updated successfully", zap.Uint("product_id", product.ID))
 	return nil
 }
 
 func (s *ProductService) DeleteProduct(id uint) error {
-	log.Printf("Service: Deleting product with ID: %d", id)
+	middleware.Logger.Info("Service: Deleting product", zap.Uint("product_id", id))
 
 	_, err := s.repo.GetProductByID(id)
 	if err != nil {
-		log.Printf("Service: Product not found for deletion: %v", err)
-		return errors.New("product not found")
+		middleware.Logger.Warn("Service: Product not found for deletion", zap.Uint("product_id", id))
+		return middleware.NewAppError(404, "Product not found", err)
 	}
 
 	if err := s.repo.DeleteProduct(id); err != nil {
-		log.Printf("Service: Failed to delete product: %v", err)
-		return errors.New("failed to delete product")
+		middleware.Logger.Error("Service: Failed to delete product", zap.Error(err))
+		return middleware.NewAppError(500, "Failed to delete product", err)
 	}
 
-	log.Println("Service: Product deleted successfully")
+	middleware.Logger.Info("Service: Product deleted successfully", zap.Uint("product_id", id))
 	return nil
 }
