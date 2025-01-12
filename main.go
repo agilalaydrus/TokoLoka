@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap" // Tambahkan import zap
+	"log"
 	"main.go/config"
 	"main.go/controller"
 	"main.go/middleware"
@@ -12,16 +12,11 @@ import (
 )
 
 func main() {
-	// Inisialisasi logger Zap
-	middleware.InitLogger() // Zap logger diinisialisasi
-	defer middleware.Logger.Sync()
-	middleware.Logger.Info("Logger berhasil diinisialisasi")
-
 	// Inisialisasi koneksi ke database
 	if err := config.InitDB(); err != nil {
-		middleware.Logger.Fatal("Gagal menginisialisasi database", zap.Error(err)) // Gunakan zap.Error
+		log.Fatalf("Gagal menginisialisasi database: %v", err)
 	}
-	middleware.Logger.Info("Database berhasil diinisialisasi")
+	log.Println("Database berhasil diinisialisasi")
 
 	// Inisialisasi Repository
 	userRepo := repository.NewUserRepository(config.DB)
@@ -37,13 +32,7 @@ func main() {
 
 	// Membuat router Gin
 	r := gin.Default()
-	r.SetTrustedProxies(nil)
-
-	// Tambahkan middleware logging request
-	r.Use(middleware.RequestLogger()) // Middleware global untuk logging request
-
-	// Tambahkan middleware global untuk Error Handling
-	r.Use(middleware.ErrorHandler())
+	r.SetTrustedProxies(nil) // Tidak mempercayai proxy mana pun
 
 	// Routes untuk autentikasi
 	authRoutes := r.Group("/auth")
@@ -51,7 +40,7 @@ func main() {
 		authRoutes.POST("/register", userController.RegisterUser) // Endpoint untuk registrasi
 		authRoutes.POST("/login", userController.LoginUser)       // Endpoint untuk login
 	}
-	middleware.Logger.Info("Routes untuk autentikasi berhasil didaftarkan")
+	log.Println("Routes untuk autentikasi berhasil didaftarkan")
 
 	// Routes yang dilindungi oleh JWT
 	protectedRoutes := r.Group("/api")
@@ -74,35 +63,34 @@ func main() {
 
 		// Rute untuk User dan Administrator
 		userRoutes := protectedRoutes.Group("/")
-		userRoutes.Use(middleware.RoleBasedAccessControl("ANY"))
+		userRoutes.Use(middleware.RoleBasedAccessControl("ANY")) // Role apapun
 		{
-			// Routes untuk Categories dan Products
+			// Categories dan Products (GET saja)
 			userRoutes.GET("/categories", productController.GetAllCategories)
 			userRoutes.GET("/categories/:id", productController.GetCategoryByID)
 
 			userRoutes.GET("/products", productController.GetAllProducts)
 			userRoutes.GET("/products/:id", productController.GetProductByID)
 
-			// routes untuk User
-			userRoutes.GET("/user", userController.GetUserDetails) // Detail user
-			userRoutes.PUT("/user", userController.UpdateUser)     // Edit user
+			// Transaksi dan Laporan (tambahkan sesuai kebutuhan)
+			// userRoutes.POST("/transactions", transactionController.CreateTransaction)
+			// userRoutes.GET("/reports", reportController.GetReports)
 		}
 	}
-
-	middleware.Logger.Info("Routes yang dilindungi JWT berhasil didaftarkan")
+	log.Println("Routes yang dilindungi JWT berhasil didaftarkan")
 
 	// Endpoint debugging untuk mencetak semua rute
 	r.GET("/debug/routes", func(c *gin.Context) {
 		routes := r.Routes()
 		for _, route := range routes {
-			middleware.Logger.Info("Route", zap.String("method", route.Method), zap.String("path", route.Path)) // Gunakan zap.String
+			log.Printf("Route: %s %s", route.Method, route.Path)
 		}
 		c.JSON(http.StatusOK, routes)
 	})
 
 	// Menjalankan server di port 8080
-	middleware.Logger.Info("Server dijalankan pada port 8080")
+	log.Println("Server dijalankan pada port 8080")
 	if err := r.Run(":8080"); err != nil {
-		middleware.Logger.Fatal("Server gagal dijalankan", zap.Error(err)) // Gunakan zap.Error
+		log.Fatalf("Server gagal dijalankan: %v", err)
 	}
 }

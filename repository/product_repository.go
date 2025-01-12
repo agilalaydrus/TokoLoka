@@ -2,10 +2,9 @@ package repository
 
 import (
 	"errors"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"log"
 	"main.go/entity"
-	"main.go/middleware"
 )
 
 type ProductRepository interface {
@@ -34,124 +33,124 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 
 // Category methods
 func (r *productRepository) CreateCategory(category *entity.Category) error {
-	middleware.Logger.Info("Repository: Creating category", zap.Any("category", category))
+	log.Printf("Repository: Creating category with data: %+v", category)
 	if category.Name == "" {
-		middleware.Logger.Warn("Repository: Category name cannot be empty")
+		log.Println("Repository: Category name cannot be empty")
 		return errors.New("category name cannot be empty")
 	}
 	if err := r.db.Create(category).Error; err != nil {
-		middleware.Logger.Error("Repository: Error creating category", zap.Error(err))
+		log.Printf("Repository: Error creating category: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Category created successfully", zap.Uint("category_id", category.ID))
+	log.Println("Repository: Category created successfully")
 	return nil
 }
 
 func (r *productRepository) GetAllCategories() ([]entity.Category, error) {
-	middleware.Logger.Info("Repository: Fetching all categories")
+	log.Println("Repository: Fetching all categories from database")
 	var categories []entity.Category
 	if err := r.db.Find(&categories).Error; err != nil {
-		middleware.Logger.Error("Repository: Error fetching categories", zap.Error(err))
+		log.Printf("Repository: Error fetching categories: %v", err)
 		return nil, err
 	}
-	middleware.Logger.Info("Repository: Categories fetched successfully", zap.Int("count", len(categories)))
+	log.Printf("Repository: Fetched categories: %+v", categories)
 	return categories, nil
 }
 
 func (r *productRepository) GetCategoryByID(id uint) (*entity.Category, error) {
-	middleware.Logger.Info("Repository: Fetching category by ID", zap.Uint("category_id", id))
+	log.Printf("Repository: Fetching category with ID: %d", id)
 	var category entity.Category
 	if err := r.db.First(&category, id).Error; err != nil {
-		middleware.Logger.Warn("Repository: Category not found", zap.Error(err))
-		return nil, errors.New("category not found")
+		log.Printf("Repository: Error fetching category: %v", err)
+		return nil, err
 	}
-	middleware.Logger.Info("Repository: Category fetched successfully", zap.Any("category", category))
+	log.Printf("Repository: Fetched category: %+v", category)
 	return &category, nil
 }
 
 func (r *productRepository) UpdateCategory(category *entity.Category) error {
-	middleware.Logger.Info("Repository: Updating category", zap.Uint("category_id", category.ID))
+	log.Printf("Repository: Updating category with ID: %d", category.ID)
 	if err := r.db.Save(category).Error; err != nil {
-		middleware.Logger.Error("Repository: Error updating category", zap.Error(err))
+		log.Printf("Repository: Error updating category: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Category updated successfully", zap.Uint("category_id", category.ID))
+	log.Println("Repository: Category updated successfully")
 	return nil
 }
 
 func (r *productRepository) DeleteCategory(id uint) error {
-	middleware.Logger.Info("Repository: Deleting category", zap.Uint("category_id", id))
+	log.Printf("Repository: Deleting category with ID: %d", id)
 	var category entity.Category
 	if err := r.db.First(&category, id).Error; err != nil {
-		middleware.Logger.Warn("Repository: Category not found for deletion", zap.Error(err))
+		log.Printf("Repository: Category not found: %v", err)
 		return errors.New("category not found")
 	}
 	if err := r.db.Delete(&category).Error; err != nil {
-		middleware.Logger.Error("Repository: Error deleting category", zap.Error(err))
+		log.Printf("Repository: Error deleting category: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Category deleted successfully", zap.Uint("category_id", id))
+	log.Println("Repository: Category deleted successfully")
 	return nil
 }
 
 // Product methods
 func (r *productRepository) CreateProduct(product *entity.Product) error {
-	middleware.Logger.Info("Repository: Creating product", zap.Any("product", product))
+	log.Printf("Repository: Creating product with data: %+v", product)
 	if product.Name == "" || product.Price <= 0 || product.Stock < 0 {
-		middleware.Logger.Warn("Repository: Invalid product data", zap.Any("product", product))
+		log.Println("Repository: Invalid product data")
 		return errors.New("invalid product data")
 	}
 	if err := r.db.Create(product).Error; err != nil {
-		middleware.Logger.Error("Repository: Error creating product", zap.Error(err))
+		log.Printf("Repository: Error creating product: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Product created successfully", zap.Uint("product_id", product.ID))
+	log.Println("Repository: Product created successfully")
 	return nil
 }
 
 func (r *productRepository) GetAllProducts() ([]entity.Product, error) {
-	middleware.Logger.Info("Repository: Fetching all products")
+	log.Println("Repository: Fetching all products from database")
 	var products []entity.Product
 	if err := r.db.Preload("Category").Find(&products).Error; err != nil {
-		middleware.Logger.Error("Repository: Error fetching products", zap.Error(err))
+		log.Printf("Repository: Error fetching products: %v", err)
 		return nil, err
 	}
-	middleware.Logger.Info("Repository: Products fetched successfully", zap.Int("count", len(products)))
+	log.Printf("Repository: Fetched products: %+v", products)
 	return products, nil
 }
 
 func (r *productRepository) GetProductByID(id uint) (*entity.Product, error) {
-	middleware.Logger.Info("Repository: Fetching product by ID", zap.Uint("product_id", id))
+	log.Printf("Repository: Fetching product with ID: %d", id)
 	var product entity.Product
 	if err := r.db.Preload("Category").First(&product, id).Error; err != nil {
-		middleware.Logger.Warn("Repository: Product not found", zap.Error(err))
-		return nil, errors.New("product not found")
+		log.Printf("Repository: Error fetching product: %v", err)
+		return nil, err
 	}
-	middleware.Logger.Info("Repository: Product fetched successfully", zap.Any("product", product))
+	log.Printf("Repository: Fetched product: %+v", product)
 	return &product, nil
 }
 
 func (r *productRepository) UpdateProduct(product *entity.Product) error {
-	middleware.Logger.Info("Repository: Updating product", zap.Uint("product_id", product.ID))
+	log.Printf("Repository: Updating product with ID: %d", product.ID)
 	if err := r.db.Save(product).Error; err != nil {
-		middleware.Logger.Error("Repository: Error updating product", zap.Error(err))
+		log.Printf("Repository: Error updating product: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Product updated successfully", zap.Uint("product_id", product.ID))
+	log.Println("Repository: Product updated successfully")
 	return nil
 }
 
 func (r *productRepository) DeleteProduct(id uint) error {
-	middleware.Logger.Info("Repository: Deleting product", zap.Uint("product_id", id))
+	log.Printf("Repository: Deleting product with ID: %d", id)
 	var product entity.Product
 	if err := r.db.First(&product, id).Error; err != nil {
-		middleware.Logger.Warn("Repository: Product not found for deletion", zap.Error(err))
+		log.Printf("Repository: Product not found: %v", err)
 		return errors.New("product not found")
 	}
 	if err := r.db.Delete(&product).Error; err != nil {
-		middleware.Logger.Error("Repository: Error deleting product", zap.Error(err))
+		log.Printf("Repository: Error deleting product: %v", err)
 		return err
 	}
-	middleware.Logger.Info("Repository: Product deleted successfully", zap.Uint("product_id", id))
+	log.Println("Repository: Product deleted successfully")
 	return nil
 }
