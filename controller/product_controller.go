@@ -1,21 +1,20 @@
 package controller
 
 import (
-	"net/http"
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"main.go/entity"
 	"main.go/middleware"
 	"main.go/service"
+	"net/http"
+	"strconv"
 )
 
 type ProductController struct {
-	service *service.ProductService
+	service service.ProductService
 }
 
-func NewProductController(service *service.ProductService) *ProductController {
+func NewProductController(service service.ProductService) *ProductController {
 	return &ProductController{service: service}
 }
 

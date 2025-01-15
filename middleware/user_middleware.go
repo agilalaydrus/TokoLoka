@@ -158,3 +158,19 @@ func RoleBasedAccessControl(requiredRole string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// HasRole - Helper function untuk memvalidasi role user
+func HasRole(c *gin.Context, roles []string) bool {
+	role, exists := c.Get("role")
+	if !exists {
+		return false
+	}
+
+	for _, r := range roles {
+		if role == r {
+			return true
+		}
+	}
+
+	return false
+}

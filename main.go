@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap" // Tambahkan import zap
+	"go.uber.org/zap"
 	"main.go/config"
 	"main.go/controller"
 	"main.go/middleware"
@@ -13,51 +13,61 @@ import (
 
 func main() {
 	// Inisialisasi logger Zap
-	middleware.InitLogger() // Zap logger diinisialisasi
+	middleware.InitLogger()
 	defer middleware.Logger.Sync()
 	middleware.Logger.Info("Logger berhasil diinisialisasi")
 
 	// Inisialisasi koneksi ke database
 	if err := config.InitDB(); err != nil {
-		middleware.Logger.Fatal("Gagal menginisialisasi database", zap.Error(err)) // Gunakan zap.Error
+		middleware.Logger.Fatal("Gagal menginisialisasi database", zap.Error(err))
 	}
 	middleware.Logger.Info("Database berhasil diinisialisasi")
 
 	// Inisialisasi Repository
 	userRepo := repository.NewUserRepository(config.DB)
 	productRepo := repository.NewProductRepository(config.DB)
+	transactionRepo := repository.NewTransactionsRepository(config.DB)
+	activityLogRepo := repository.NewActivityLogRepository(config.DB)
 
 	// Inisialisasi Service
 	userService := service.NewUserService(userRepo)
 	productService := service.NewProductService(productRepo)
+	activityLogService := service.NewActivityLogService(activityLogRepo)
+	transactionService := service.NewTransactionsService(transactionRepo, productRepo, activityLogService)
 
 	// Inisialisasi Controller
 	userController := controller.NewUserController(userService)
 	productController := controller.NewProductController(productService)
+	transactionController := controller.NewTransactionsController(transactionService)
+	callbackController := controller.NewCallbackController(transactionService)
 
 	// Membuat router Gin
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
 
 	// Tambahkan middleware logging request
-	r.Use(middleware.RequestLogger()) // Middleware global untuk logging request
+	r.Use(middleware.RequestLogger())
 
 	// Tambahkan middleware global untuk Error Handling
 	r.Use(middleware.ErrorHandler())
 
-	// Routes untuk autentikasi
+	// Routes untuk Callback Simulasi
+	r.POST("/callback/transaction-status", callbackController.CallbackTransactionStatus)
+
+	// Routes untuk Autentikasi
 	authRoutes := r.Group("/auth")
 	{
-		authRoutes.POST("/register", userController.RegisterUser) // Endpoint untuk registrasi
-		authRoutes.POST("/login", userController.LoginUser)       // Endpoint untuk login
+		authRoutes.POST("/register", userController.RegisterUser)
+		authRoutes.POST("/login", userController.LoginUser)
 	}
+
 	middleware.Logger.Info("Routes untuk autentikasi berhasil didaftarkan")
 
 	// Routes yang dilindungi oleh JWT
 	protectedRoutes := r.Group("/api")
-	protectedRoutes.Use(middleware.AuthorizeJWT) // Middleware JWT diterapkan
+	protectedRoutes.Use(middleware.AuthorizeJWT)
 	{
-		// Rute untuk Administrator (akses penuh)
+		// Rute untuk Administrator
 		adminRoutes := protectedRoutes.Group("/")
 		adminRoutes.Use(middleware.RoleBasedAccessControl("administrator"))
 		{
@@ -70,6 +80,11 @@ func main() {
 			adminRoutes.POST("/products", productController.CreateProduct)
 			adminRoutes.PUT("/products/:id", productController.UpdateProduct)
 			adminRoutes.DELETE("/products/:id", productController.DeleteProduct)
+
+			// Transactions Management
+			adminRoutes.DELETE("/transactions/:id", transactionController.DeleteTransaction)
+			adminRoutes.PUT("/transactions/:id/status", transactionController.UpdateTransactionStatus)
+			adminRoutes.GET("/transactions", transactionController.GetAllTransactions)
 		}
 
 		// Rute untuk User dan Administrator
@@ -83,9 +98,14 @@ func main() {
 			userRoutes.GET("/products", productController.GetAllProducts)
 			userRoutes.GET("/products/:id", productController.GetProductByID)
 
-			// routes untuk User
-			userRoutes.GET("/user", userController.GetUserDetails) // Detail user
-			userRoutes.PUT("/user", userController.UpdateUser)     // Edit user
+			// Routes untuk User Management
+			userRoutes.GET("/user", userController.GetUserDetails)
+			userRoutes.PUT("/user", userController.UpdateUser)
+
+			// Routes untuk Transactions
+			userRoutes.POST("/transactions", transactionController.CreateTransaction)
+			userRoutes.GET("/transactions/:id", transactionController.GetTransactionByID)
+			userRoutes.GET("/users/:user_id/transactions", transactionController.GetTransactionByUserID)
 		}
 	}
 
@@ -95,7 +115,7 @@ func main() {
 	r.GET("/debug/routes", func(c *gin.Context) {
 		routes := r.Routes()
 		for _, route := range routes {
-			middleware.Logger.Info("Route", zap.String("method", route.Method), zap.String("path", route.Path)) // Gunakan zap.String
+			middleware.Logger.Info("Route", zap.String("method", route.Method), zap.String("path", route.Path))
 		}
 		c.JSON(http.StatusOK, routes)
 	})
@@ -103,6 +123,6 @@ func main() {
 	// Menjalankan server di port 8080
 	middleware.Logger.Info("Server dijalankan pada port 8080")
 	if err := r.Run(":8080"); err != nil {
-		middleware.Logger.Fatal("Server gagal dijalankan", zap.Error(err)) // Gunakan zap.Error
+		middleware.Logger.Fatal("Server gagal dijalankan", zap.Error(err))
 	}
 }

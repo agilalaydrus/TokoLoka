@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"time"
 )
@@ -11,9 +12,14 @@ import (
 var Logger *zap.Logger
 
 func InitLogger() {
-	// Konfigurasi Zap
-	logFile, _ := os.Create("logs/app.log") // Buat file log
-	writeSyncer := zapcore.AddSync(logFile)
+	// Konfigurasi rotasi log menggunakan lumberjack
+	logFile := &lumberjack.Logger{
+		Filename:   "logs/app.log",
+		MaxSize:    10,   // Maksimum ukuran file log dalam MB
+		MaxBackups: 3,    // Maksimum jumlah file cadangan
+		MaxAge:     28,   // Maksimum usia file log dalam hari
+		Compress:   true, // Kompres file log lama
+	}
 
 	// Konfigurasi Encoder
 	encoderConfig := zap.NewProductionEncoderConfig()
@@ -24,14 +30,14 @@ func InitLogger() {
 
 	// Konfigurasi Core
 	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderConfig),                                // Format log JSON
-		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), writeSyncer), // Tulis ke file dan konsol
+		zapcore.NewJSONEncoder(encoderConfig),
+		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(logFile)),
 		zapcore.DebugLevel, // Level log minimum
 	)
 
 	// Buat logger
 	Logger = zap.New(core, zap.AddCaller())
-	Logger.Info("Zap logger initialized with file logging")
+	Logger.Info("Zap logger initialized with file logging and rotation")
 }
 
 // RequestLogger middleware untuk mencatat setiap permintaan HTTP
