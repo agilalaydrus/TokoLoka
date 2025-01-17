@@ -35,8 +35,15 @@ func (r *reportRepository) GetTransactionsSummary(filters entity.ReportFilters, 
 		Joins("join products on transaction_items.product_id = products.id").
 		Joins("join categories on products.category_id = categories.id").
 		Joins("join users on transactions.user_id = users.id").
-		Where("transactions.created_at BETWEEN ? AND ?", filters.StartDate, filters.EndDate).
 		Group("transactions.id, users.id, products.name, categories.name, transactions.created_at")
+
+	if filters.StartDate != "" && filters.EndDate != "" {
+		query = query.Where("transactions.created_at BETWEEN ? AND ?", filters.StartDate, filters.EndDate)
+	}
+
+	if !isAdmin {
+		query = query.Where("transactions.user_id = ?", userID)
+	}
 
 	if filters.Username != "" {
 		query = query.Where("users.username LIKE ?", "%"+filters.Username+"%")
@@ -46,9 +53,9 @@ func (r *reportRepository) GetTransactionsSummary(filters entity.ReportFilters, 
 		query = query.Where("products.name LIKE ?", "%"+filters.ProductName+"%")
 	}
 
-	if !isAdmin {
-		query = query.Where("transactions.user_id = ?", filters.UserID)
-	}
+	// Pagination
+	offset := (filters.Page - 1) * filters.Limit
+	query = query.Limit(filters.Limit).Offset(offset)
 
 	if err := query.Scan(&summaries).Error; err != nil {
 		return nil, err

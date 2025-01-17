@@ -34,7 +34,9 @@ type TransactionSummary struct {
 type ReportFilters struct {
 	StartDate   string `json:"start_date" binding:"required"`
 	EndDate     string `json:"end_date" binding:"required"`
-	Username    string `json:"username,omitempty"`     // Opsional
-	ProductName string `json:"product_name,omitempty"` // Opsional
-	UserID      uint   `json:"-"`                      // Diisi dari JWT token
+	Username    string `json:"username,omitempty"`
+	ProductName string `json:"product_name,omitempty"`
+	UserID      uint   `json:"-"`
+	Page        int    `json:"page,omitempty"`  // Halaman saat ini
+	Limit       int    `json:"limit,omitempty"` // Jumlah data per halaman
 }
