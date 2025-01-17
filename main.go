@@ -28,17 +28,20 @@ func main() {
 	productRepo := repository.NewProductRepository(config.DB)
 	transactionRepo := repository.NewTransactionsRepository(config.DB)
 	activityLogRepo := repository.NewActivityLogRepository(config.DB)
+	reportRepo := repository.NewReportRepository(config.DB) // Pastikan ini digunakan
 
 	// Inisialisasi Service
 	userService := service.NewUserService(userRepo)
 	productService := service.NewProductService(productRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
 	transactionService := service.NewTransactionsService(transactionRepo, productRepo, activityLogService)
+	reportService := service.NewReportService(reportRepo) // Pastikan ini digunakan
 
 	// Inisialisasi Controller
 	userController := controller.NewUserController(userService)
 	productController := controller.NewProductController(productService)
 	transactionController := controller.NewTransactionsController(transactionService)
+	reportController := controller.NewReportController(reportService) // Pastikan ini digunakan
 	callbackController := controller.NewCallbackController(transactionService)
 
 	// Membuat router Gin
@@ -106,6 +109,10 @@ func main() {
 			userRoutes.POST("/transactions", transactionController.CreateTransaction)
 			userRoutes.GET("/transactions/:id", transactionController.GetTransactionByID)
 			userRoutes.GET("/users/:user_id/transactions", transactionController.GetTransactionByUserID)
+
+			// Reports Management
+			userRoutes.POST("/reports/generate", reportController.GenerateReport)
+			userRoutes.GET("/reports/download", reportController.DownloadReport)
 		}
 	}
 

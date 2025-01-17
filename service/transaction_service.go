@@ -118,6 +118,7 @@ func (s *transactionsService) simulateCallback(transaction *entity.Transaction) 
 		transaction.Status = "failed"
 	} else {
 		middleware.Logger.Info("Transaction success",
+			zap.String("destination_number", transaction.DestinationNumber),
 			zap.Uint("transaction_id", transaction.ID),
 			zap.String("serial_number", randomSerial),
 		)
