@@ -17,6 +17,7 @@ type ProductService interface {
 	GetProductByID(id uint) (*entity.Product, error)
 	UpdateProduct(product *entity.Product) error
 	DeleteProduct(id uint) error
+	UpdateProductImage(productID string, imageURL string) error
 }
 
 type productService struct {
@@ -65,4 +66,8 @@ func (s *productService) UpdateProduct(product *entity.Product) error {
 
 func (s *productService) DeleteProduct(id uint) error {
 	return s.repo.DeleteProduct(id)
+}
+
+func (s *productService) UpdateProductImage(productID string, imageURL string) error {
+	return s.repo.UpdateImage(productID, imageURL)
 }

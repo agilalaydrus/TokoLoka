@@ -7,6 +7,8 @@ import (
 	"main.go/middleware"
 	"main.go/service"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -247,4 +249,37 @@ func (pc *ProductController) DeleteProduct(c *gin.Context) {
 
 	middleware.Logger.Info("Product deleted successfully", zap.Int("id", id))
 	c.JSON(http.StatusOK, gin.H{"message": "Product deleted successfully"})
+}
+
+func (pc *ProductController) UploadProductImage(c *gin.Context) {
+	productID := c.Param("id")
+
+	// Ambil file dari request
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file"})
+		return
+	}
+
+	// Tentukan lokasi penyimpanan file
+	uploadDir := "uploads/products/"
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		os.MkdirAll(uploadDir, os.ModePerm)
+	}
+	filePath := filepath.Join(uploadDir, filepath.Base(file.Filename))
+
+	// Simpan file
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update URL gambar di database
+	imageURL := "/" + filePath
+	if err := pc.service.UpdateProductImage(productID, imageURL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product image"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Image uploaded successfully", "image_url": imageURL})
 }

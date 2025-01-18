@@ -100,6 +100,7 @@ func main() {
 
 			userRoutes.GET("/products", productController.GetAllProducts)
 			userRoutes.GET("/products/:id", productController.GetProductByID)
+			userRoutes.POST("/products/:id/image", productController.UploadProductImage)
 
 			// Routes untuk User Management
 			userRoutes.GET("/user", userController.GetUserDetails)

@@ -12,6 +12,7 @@ type Product struct {
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 	Category    Category  `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	ImageURL    string    `gorm:"size:255"`
 }
 
 type Category struct {

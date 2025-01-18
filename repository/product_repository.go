@@ -22,6 +22,7 @@ type ProductRepository interface {
 	GetProductByID(id uint) (*entity.Product, error)
 	UpdateProduct(product *entity.Product) error
 	DeleteProduct(id uint) error
+	UpdateImage(productID string, imageURL string) error
 
 	// ➕ Tambahkan ini
 	GetByID(id uint) (*entity.Product, error)
@@ -161,4 +162,8 @@ func (r *productRepository) GetByID(id uint) (*entity.Product, error) {
 
 	middleware.Logger.Info("Repository: Product fetched successfully", zap.Any("product", product))
 	return &product, nil
+}
+
+func (r *productRepository) UpdateImage(productID string, imageURL string) error {
+	return r.db.Model(&entity.Product{}).Where("id = ?", productID).Update("image_url", imageURL).Error
 }
