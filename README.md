@@ -89,9 +89,6 @@ go run main.go
 - GET /api/reports/download - Mengunduh laporan dalam format CSV atau PDF
 
 ## Struktur Proyek
-bash
-Copy
-Edit
 TokoLoka/
 ├── main.go                     # Entry point aplikasi
 ├── config/                     # Konfigurasi database
