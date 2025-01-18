@@ -148,7 +148,7 @@ func (s *transactionsService) generateSerialNumber() string {
 	return fmt.Sprintf("SN-%s", string(serial))
 }
 
-// 🔍 GetTransactionByID - Mengambil detail transaksi berdasarkan ID
+// GetTransactionByID - Mengambil detail transaksi berdasarkan ID
 func (s *transactionsService) GetTransactionByID(id uint) (*entity.Transaction, error) {
 	middleware.Logger.Info("Service: GetTransactionByID called", zap.Uint("transaction_id", id))
 
@@ -162,7 +162,7 @@ func (s *transactionsService) GetTransactionByID(id uint) (*entity.Transaction, 
 	return transaction, nil
 }
 
-// 🔍 GetAllTransactionsByUser - Mendapatkan semua transaksi milik user
+// GetAllTransactionsByUser - Mendapatkan semua transaksi milik user
 func (s *transactionsService) GetAllTransactionsByUser(userID uint) ([]entity.Transaction, error) {
 	middleware.Logger.Info("Service: GetAllTransactionsByUser called", zap.Uint("user_id", userID))
 
@@ -190,7 +190,7 @@ func (s *transactionsService) GetAllTransactions() ([]entity.Transaction, error)
 	return transactions, nil
 }
 
-// 🔄 UpdateTransactionStatus - Mengupdate status transaksi
+// UpdateTransactionStatus - Mengupdate status transaksi
 func (s *transactionsService) UpdateTransactionStatus(id uint, status string) error {
 	middleware.Logger.Info("Service: UpdateTransactionStatus called", zap.Uint("transaction_id", id), zap.String("status", status))
 
@@ -223,7 +223,7 @@ func (s *transactionsService) UpdateTransactionStatus(id uint, status string) er
 	return nil
 }
 
-// 🗑️ DeleteTransaction - Menghapus transaksi berdasarkan ID
+// DeleteTransaction - Menghapus transaksi berdasarkan ID
 func (s *transactionsService) DeleteTransaction(id uint) error {
 	middleware.Logger.Info("Service: DeleteTransaction called", zap.Uint("transaction_id", id))
 

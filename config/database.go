@@ -35,7 +35,7 @@ func InitDB() error {
 
 	log.Println("Koneksi ke database berhasil!")
 
-	// Jalankan migration untuk semua tabel
+	// migration untuk semua tabel
 	err = DB.AutoMigrate(
 		&entity.User{},
 		&entity.Product{},

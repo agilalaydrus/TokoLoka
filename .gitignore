@@ -13,3 +13,6 @@
 # File editor
 .idea/
 .vscode/
+
+# Folder upload
+.uploads/
