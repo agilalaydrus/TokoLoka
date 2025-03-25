@@ -14,7 +14,7 @@ func ConvertToTransactionResponse(transaction *entity.Transaction) entity.Transa
 		UpdatedAt:         transaction.UpdatedAt,
 		User: entity.UserSafeResponse{
 			ID:       transaction.User.ID,
-			Username: transaction.User.Username,
+			Username: transaction.User.PhoneNumber,
 			Email:    transaction.User.Email,
 			Role:     transaction.User.Role,
 		},

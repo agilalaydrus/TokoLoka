@@ -24,7 +24,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - JWT_SECRET=IVBhc3N3b3JkMjAyNA
+      - JWT_SECRET=AS12wbasb12iw!asdubaf
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin

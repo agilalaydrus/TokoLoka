@@ -12,6 +12,7 @@ type UserRepository interface {
 	FindByID(id uint) (*entity.User, error)
 	Create(user *entity.User) error
 	Update(user *entity.User) error
+	FindByPhoneNumber(phone string) (*entity.User, error)
 }
 
 type userRepository struct {
@@ -62,4 +63,12 @@ func (r *userRepository) Update(user *entity.User) error {
 	}
 	middleware.Logger.Info("Repository: User updated successfully", zap.Uint("user_id", user.ID))
 	return nil
+}
+
+func (r *userRepository) FindByPhoneNumber(phone string) (*entity.User, error) {
+	var user entity.User
+	if err := r.db.Where("phone_number = ?", phone).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

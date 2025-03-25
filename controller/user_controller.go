@@ -36,7 +36,7 @@ func (uc *UserController) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	middleware.Logger.Info("User successfully registered", zap.String("email", newUser.Email))
+	middleware.Logger.Info("User successfully registered", zap.String("phone_number", newUser.PhoneNumber))
 	c.JSON(http.StatusCreated, gin.H{"message": "User successfully registered"})
 }
 
@@ -56,12 +56,12 @@ func (uc *UserController) LoginUser(c *gin.Context) {
 	// Panggil service untuk login dan verifikasi pengguna
 	token, err := uc.userService.LoginUser(loginData)
 	if err != nil {
-		middleware.Logger.Error("Login failed", zap.String("email", loginData.Email), zap.Error(err))
+		middleware.Logger.Error("Login failed", zap.String("phone_number", loginData.PhoneNumber), zap.Error(err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	middleware.Logger.Info("Login successful", zap.String("email", loginData.Email))
+	middleware.Logger.Info("Login successful", zap.String("phone_number", loginData.PhoneNumber))
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"token":   token,
@@ -80,48 +80,57 @@ func (uc *UserController) GetUserDetails(c *gin.Context) {
 		return
 	}
 
+	// Safe casting to uint
+	userIDUint, ok := userID.(uint)
+	if !ok {
+		middleware.Logger.Error("Failed to cast user_id to uint")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
 	// Panggil service untuk mendapatkan detail user
-	user, err := uc.userService.GetUserByID(userID.(uint))
+	user, err := uc.userService.GetUserByID(userIDUint)
 	if err != nil {
-		middleware.Logger.Error("Error retrieving user", zap.Uint("user_id", userID.(uint)), zap.Error(err))
+		middleware.Logger.Error("Error retrieving user", zap.Uint("user_id", userIDUint), zap.Error(err))
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	middleware.Logger.Info("User details retrieved successfully", zap.Uint("user_id", userID.(uint)))
+	middleware.Logger.Info("User details retrieved successfully", zap.Uint("user_id", userIDUint))
 	c.JSON(http.StatusOK, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"email":    user.Email,
-		"role":     user.Role,
+		"id":         user.ID,
+		"full_name":  user.FullName,    // Menggunakan full_name sebagai pengganti username
+		"phone":      user.PhoneNumber, // Nomor HP sebagai identifier utama
+		"email":      user.Email,       // Opsional, jika masih digunakan
+		"address":    user.Address,     // Menambahkan alamat lengkap
+		"role":       user.Role,
+		"created_at": user.CreatedAt,
 	})
 }
 
 // UpdateUser untuk memperbarui data pengguna
 func (uc *UserController) UpdateUser(c *gin.Context) {
-	middleware.Logger.Info("Controller: UpdateUser called")
-
 	userID, exists := c.Get("user_id")
 	if !exists {
-		middleware.Logger.Warn("User ID not found in context")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+	userIDUint, ok := userID.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
 	var updatedData service.UserUpdateRequest
 	if err := c.ShouldBindJSON(&updatedData); err != nil {
-		middleware.Logger.Error("Error binding updated user data", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
 		return
 	}
 
-	// Update user data via service
-	if err := uc.userService.UpdateUser(userID.(uint), updatedData); err != nil {
-		middleware.Logger.Error("Error updating user", zap.Uint("user_id", userID.(uint)), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := uc.userService.UpdateUser(userIDUint, updatedData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	middleware.Logger.Info("User information updated successfully", zap.Uint("user_id", userID.(uint)))
-	c.JSON(http.StatusOK, gin.H{"message": "User information updated"})
+	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
