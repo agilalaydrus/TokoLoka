@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"main.go/entity"
 	"main.go/middleware"
@@ -14,11 +15,15 @@ import (
 )
 
 type UserService struct {
-	userRepo repository.UserRepository
+	userRepo  repository.UserRepository
+	tokenRepo repository.TokenRepository
 }
 
-func NewUserService(userRepo repository.UserRepository) *UserService {
-	return &UserService{userRepo: userRepo}
+func NewUserService(userRepo repository.UserRepository, tokenRepo repository.TokenRepository) *UserService {
+	return &UserService{
+		userRepo:  userRepo,
+		tokenRepo: tokenRepo,
+	}
 }
 
 type UserRegisterRequest struct {
@@ -40,9 +45,8 @@ type UserUpdateRequest struct {
 	Address  string `json:"address"`
 }
 
+// ======================== REGISTER ==========================
 func (s *UserService) RegisterUser(user UserRegisterRequest) error {
-	middleware.Logger.Info("Service: Registering user", zap.String("email", user.Email))
-
 	if user.FullName == "" || user.PhoneNumber == "" || user.Password == "" {
 		return middleware.NewAppError(400, "Full name, phone number, and password are required", nil)
 	}
@@ -83,35 +87,66 @@ func (s *UserService) RegisterUser(user UserRegisterRequest) error {
 	return nil
 }
 
-func (s *UserService) LoginUser(user UserLoginRequest) (string, error) {
-	middleware.Logger.Info("Service: Logging in user", zap.String("phone", user.PhoneNumber))
-
+// ======================== LOGIN ==========================
+func (s *UserService) LoginUser(user UserLoginRequest) (string, string, error) {
 	if user.PhoneNumber == "" || user.Password == "" {
-		return "", middleware.NewAppError(400, "Phone number and password are required", nil)
+		return "", "", middleware.NewAppError(400, "Phone number and password are required", nil)
 	}
 
 	existingUser, err := s.userRepo.FindByPhoneNumber(user.PhoneNumber)
 	if err != nil || existingUser == nil {
-		return "", middleware.NewAppError(401, "Invalid phone number or password", nil)
+		return "", "", middleware.NewAppError(401, "Invalid phone number or password", nil)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(user.Password))
 	if err != nil {
-		return "", middleware.NewAppError(401, "Invalid phone number or password", nil)
+		return "", "", middleware.NewAppError(401, "Invalid phone number or password", nil)
 	}
 
-	token, err := generateJWT(existingUser)
+	accessToken, err := generateJWT(existingUser)
+	if err != nil {
+		return "", "", middleware.NewAppError(500, "Failed to generate token", err)
+	}
+
+	refreshToken := uuid.New().String()
+	refreshTokenExpires := time.Now().Add(7 * 24 * time.Hour)
+
+	rt := entity.RefreshToken{
+		UserID:    existingUser.ID,
+		Token:     refreshToken,
+		ExpiresAt: refreshTokenExpires,
+	}
+
+	if err := s.tokenRepo.Save(&rt); err != nil {
+		return "", "", middleware.NewAppError(500, "Failed to store refresh token", err)
+	}
+
+	middleware.Logger.Info("Service: Login successful", zap.Uint("user_id", existingUser.ID))
+	return accessToken, refreshToken, nil
+}
+
+// ======================== REFRESH TOKEN ==========================
+func (s *UserService) RefreshAccessToken(refreshToken string) (string, error) {
+	rt, err := s.tokenRepo.FindByToken(refreshToken)
+	if err != nil || rt.ExpiresAt.Before(time.Now()) {
+		return "", middleware.NewAppError(401, "Invalid or expired refresh token", err)
+	}
+
+	user, err := s.userRepo.FindByID(rt.UserID)
+	if err != nil {
+		return "", middleware.NewAppError(404, "User not found", err)
+	}
+
+	newAccessToken, err := generateJWT(user)
 	if err != nil {
 		return "", middleware.NewAppError(500, "Failed to generate token", err)
 	}
 
-	middleware.Logger.Info("Service: Login successful", zap.Uint("user_id", existingUser.ID))
-	return token, nil
+	return newAccessToken, nil
 }
 
+// ======================== UPDATE ==========================
 func (s *UserService) UpdateUser(userID uint, updatedData UserUpdateRequest) error {
-	middleware.Logger.Info("Service: Updating user", zap.Uint("user_id", userID))
-
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil || user == nil {
 		return middleware.NewAppError(404, "User not found", err)
@@ -142,18 +177,17 @@ func (s *UserService) UpdateUser(userID uint, updatedData UserUpdateRequest) err
 	return nil
 }
 
+// ======================== GET BY ID ==========================
 func (s *UserService) GetUserByID(userID uint) (*entity.User, error) {
-	middleware.Logger.Info("Service: Fetching user by ID", zap.Uint("user_id", userID))
-
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
 		return nil, middleware.NewAppError(404, "User not found", err)
 	}
 
-	middleware.Logger.Info("Service: User fetched", zap.Any("user", user))
 	return user, nil
 }
 
+// ======================== JWT & VALIDATOR ==========================
 func generateJWT(user *entity.User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":  user.ID,
@@ -164,20 +198,23 @@ func generateJWT(user *entity.User) (string, error) {
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		middleware.Logger.Fatal("JWT_SECRET is not set")
 		return "", middleware.NewAppError(500, "JWT secret is not set", nil)
 	}
 
-	signedToken, err := token.SignedString([]byte(jwtSecret))
-	if err != nil {
-		return "", middleware.NewAppError(500, "Failed to sign JWT", err)
-	}
-
-	return signedToken, nil
+	return token.SignedString([]byte(jwtSecret))
 }
 
 func isValidEmail(email string) bool {
 	const emailRegex = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	re := regexp.MustCompile(emailRegex)
 	return re.MatchString(email)
+}
+
+// ======================== LOGOUT USER ==========================
+func (s *UserService) LogoutUser(refreshToken string) error {
+	err := s.tokenRepo.Delete(refreshToken)
+	if err != nil {
+		return middleware.NewAppError(500, "Failed to revoke refresh token", err)
+	}
+	return nil
 }

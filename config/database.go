@@ -44,6 +44,7 @@ func InitDB() error {
 		&entity.TransactionItem{},
 		&entity.ActivityLog{},
 		&entity.ReportLog{},
+		&entity.RefreshToken{},
 	)
 	if err != nil {
 		return fmt.Errorf("gagal melakukan migrasi: %w", err)

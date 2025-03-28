@@ -16,114 +16,114 @@ func NewUserController(userService *service.UserService) *UserController {
 	return &UserController{userService: userService}
 }
 
-// RegisterUser untuk melakukan registrasi pengguna baru
+// ======================== REGISTER ==========================
 func (uc *UserController) RegisterUser(c *gin.Context) {
-	middleware.Logger.Info("Controller: RegisterUser called")
-
 	var newUser service.UserRegisterRequest
-
-	// Bind JSON request body ke dalam struct
 	if err := c.ShouldBindJSON(&newUser); err != nil {
-		middleware.Logger.Error("Error binding request data", zap.Error(err))
+		middleware.Logger.Error("Error binding request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
 		return
 	}
 
-	// Panggil service untuk registrasi user
 	if err := uc.userService.RegisterUser(newUser); err != nil {
-		middleware.Logger.Error("Error registering user", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	middleware.Logger.Info("User successfully registered", zap.String("phone_number", newUser.PhoneNumber))
+	middleware.Logger.Info("User registered", zap.String("phone", newUser.PhoneNumber))
 	c.JSON(http.StatusCreated, gin.H{"message": "User successfully registered"})
 }
 
-// LoginUser untuk melakukan login dan menghasilkan JWT token
+// ======================== LOGIN ==========================
 func (uc *UserController) LoginUser(c *gin.Context) {
-	middleware.Logger.Info("Controller: LoginUser called")
-
 	var loginData service.UserLoginRequest
-
-	// Bind JSON request body ke dalam struct
 	if err := c.ShouldBindJSON(&loginData); err != nil {
 		middleware.Logger.Error("Error binding login data", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Panggil service untuk login dan verifikasi pengguna
-	token, err := uc.userService.LoginUser(loginData)
+	accessToken, refreshToken, err := uc.userService.LoginUser(loginData)
 	if err != nil {
-		middleware.Logger.Error("Login failed", zap.String("phone_number", loginData.PhoneNumber), zap.Error(err))
+		middleware.Logger.Warn("Login failed", zap.String("phone", loginData.PhoneNumber), zap.Error(err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	middleware.Logger.Info("Login successful", zap.String("phone_number", loginData.PhoneNumber))
+	middleware.Logger.Info("Login successful", zap.String("phone", loginData.PhoneNumber))
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"token":   token,
+		"message":       "Login successful",
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
 	})
 }
 
-// GetUserDetails untuk mengambil detail pengguna berdasarkan ID
-func (uc *UserController) GetUserDetails(c *gin.Context) {
-	middleware.Logger.Info("Controller: GetUserDetails called")
+// ======================== REFRESH TOKEN ==========================
+func (uc *UserController) RefreshToken(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
 
-	// Ambil user_id dari JWT yang sudah didecode sebelumnya
+	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required"})
+		return
+	}
+
+	newAccessToken, err := uc.userService.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"access_token": newAccessToken})
+}
+
+// ======================== GET PROFILE ==========================
+func (uc *UserController) GetUserDetails(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		middleware.Logger.Warn("User ID not found in context")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
-
-	// Safe casting to uint
 	userIDUint, ok := userID.(uint)
 	if !ok {
-		middleware.Logger.Error("Failed to cast user_id to uint")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 		return
 	}
 
-	// Panggil service untuk mendapatkan detail user
 	user, err := uc.userService.GetUserByID(userIDUint)
 	if err != nil {
-		middleware.Logger.Error("Error retrieving user", zap.Uint("user_id", userIDUint), zap.Error(err))
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	middleware.Logger.Info("User details retrieved successfully", zap.Uint("user_id", userIDUint))
 	c.JSON(http.StatusOK, gin.H{
 		"id":         user.ID,
-		"full_name":  user.FullName,    // Menggunakan full_name sebagai pengganti username
-		"phone":      user.PhoneNumber, // Nomor HP sebagai identifier utama
-		"email":      user.Email,       // Opsional, jika masih digunakan
-		"address":    user.Address,     // Menambahkan alamat lengkap
+		"full_name":  user.FullName,
+		"phone":      user.PhoneNumber,
+		"email":      user.Email,
+		"address":    user.Address,
 		"role":       user.Role,
 		"created_at": user.CreatedAt,
 	})
 }
 
-// UpdateUser untuk memperbarui data pengguna
+// ======================== UPDATE PROFILE ==========================
 func (uc *UserController) UpdateUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 	userIDUint, ok := userID.(uint)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 		return
 	}
 
 	var updatedData service.UserUpdateRequest
 	if err := c.ShouldBindJSON(&updatedData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
@@ -133,4 +133,23 @@ func (uc *UserController) UpdateUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
+}
+
+// ======================== UPDATE PROFILE ==========================
+func (uc *UserController) Logout(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required"})
+		return
+	}
+
+	err := uc.userService.LogoutUser(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }

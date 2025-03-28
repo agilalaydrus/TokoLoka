@@ -9,6 +9,7 @@ import (
 	"main.go/repository"
 	"main.go/service"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -28,10 +29,11 @@ func main() {
 	productRepo := repository.NewProductRepository(config.DB)
 	transactionRepo := repository.NewTransactionsRepository(config.DB)
 	activityLogRepo := repository.NewActivityLogRepository(config.DB)
-	reportRepo := repository.NewReportRepository(config.DB) // Pastikan ini digunakan
+	reportRepo := repository.NewReportRepository(config.DB)
+	tokenRepo := repository.NewTokenRepository(config.DB)
 
 	// Inisialisasi Service
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, tokenRepo)
 	productService := service.NewProductService(productRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
 	transactionService := service.NewTransactionsService(transactionRepo, productRepo, activityLogService)
@@ -60,8 +62,11 @@ func main() {
 	// Routes untuk Autentikasi
 	authRoutes := r.Group("/auth")
 	{
-		authRoutes.POST("/register", userController.RegisterUser)
-		authRoutes.POST("/login", userController.LoginUser)
+		authRoutes.POST("/register", middleware.LimitRequest(3, 2*time.Minute), userController.RegisterUser)
+		authRoutes.POST("/login", middleware.LimitRequest(5, 1*time.Minute), userController.LoginUser)
+		authRoutes.POST("/refresh", userController.RefreshToken)
+		authRoutes.POST("/logout", middleware.AuthorizeJWT, userController.Logout)
+
 	}
 
 	middleware.Logger.Info("Routes untuk autentikasi berhasil didaftarkan")
